@@ -1,5 +1,16 @@
 #include "plugin.h"
 
+// #ifdef _UNICODE
+// #error "USE ASCII CODE PAGE"
+// #endif
+
+bool bIsMainWindowShow = false;
+HWND hMain = NULL;
+HINSTANCE g_hInstance = NULL;
+
+// 主窗口弹窗菜单ID
+#define MENU_MAINWINDOW_POPUP 0
+
 // Examples: https://github.com/x64dbg/x64dbg/wiki/Plugins
 // References:
 // - https://help.x64dbg.com/en/latest/developers/plugins/index.html
@@ -55,12 +66,6 @@ static bool cbExampleCommand(int argc, char** argv)
 // Initialize your plugin data here.
 bool pluginInit(PLUG_INITSTRUCT* initStruct)
 {
-    dprintf("pluginInit(pluginHandle: %d)\n", pluginHandle);
-
-    // Prefix of the functions to call here: _plugin_register
-    _plugin_registercommand(pluginHandle, PLUGIN_NAME, cbExampleCommand, true);
-
-    // Return false to cancel loading the plugin.
     return true;
 }
 
@@ -70,9 +75,6 @@ bool pluginInit(PLUG_INITSTRUCT* initStruct)
 // to use WaitForSingleObject or similar to wait for everything to close.
 void pluginStop()
 {
-    // Prefix of the functions to call here: _plugin_unregister
-
-    dprintf("pluginStop(pluginHandle: %d)\n", pluginHandle);
 }
 
 // Do GUI/Menu related things here.
@@ -80,7 +82,84 @@ void pluginStop()
 // You can get the HWND using GuiGetWindowHandle()
 void pluginSetup()
 {
-    // Prefix of the functions to call here: _plugin_menu
+    _plugin_menuaddentry(hMenu, MENU_MAINWINDOW_POPUP, "Plugin Template");
+}
 
-    dprintf("pluginSetup(pluginHandle: %d)\n", pluginHandle);
+// 弹出空窗口并输出日志
+DWORD WINAPI MsgLoopThread(LPVOID)
+{
+    MSG msg;
+    WNDCLASSA wc = {0};
+    HWND hwnd;
+
+    wc.style = CS_HREDRAW | CS_VREDRAW;
+    wc.lpfnWndProc = WndProc;
+    wc.cbClsExtra = 0;
+    wc.cbWndExtra = 0;
+    wc.hInstance = g_hInstance;
+    wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
+    wc.lpszMenuName = NULL;
+    wc.lpszClassName = "PluginTemplateWindow";
+
+    RegisterClassA(&wc);
+
+    hwnd = CreateWindowA(
+        "PluginTemplateWindow",
+        "Plugin Template",
+        WS_OVERLAPPEDWINDOW,
+        100, 100, 400, 300,
+        NULL, NULL, g_hInstance, NULL
+    );
+
+    ShowWindow(hwnd, SW_SHOW);
+    UpdateWindow(hwnd);
+
+    dprintf("hello plugintemplate!\n");
+
+    while (GetMessage(&msg, NULL, 0, 0))
+    {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+
+    bIsMainWindowShow = false;
+    return (int)msg.wParam;
+}
+
+// 最简窗口过程
+LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
+{
+    switch (iMsg)
+    {
+    case WM_CREATE:
+        return 0;
+    case WM_PAINT:
+        {
+            PAINTSTRUCT ps;
+            HDC hdc = BeginPaint(hwnd, &ps);
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
+    }
+    return DefWindowProcA(hwnd, iMsg, wParam, lParam);
+}
+
+// 菜单回调，只处理弹窗
+extern "C" __declspec(dllexport) void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENTRY* info)
+{
+    switch (info->hEntry)
+    {
+    case MENU_MAINWINDOW_POPUP:
+        if (!bIsMainWindowShow && DbgIsDebugging())
+        {
+            CloseHandle(CreateThread(0, 0, MsgLoopThread, 0, 0, 0));
+            bIsMainWindowShow = true;
+        }
+        break;
+    }
 }
