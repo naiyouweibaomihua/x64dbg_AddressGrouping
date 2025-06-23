@@ -11,7 +11,6 @@
 #include <set>
 #include <fstream>
 #include <shlobj.h>
-#include "pluginsdk/_scriptapi_module.h"
 #pragma comment(lib, "comctl32.lib")
 using namespace Script::Debug;
 
@@ -334,36 +333,6 @@ std::string InputGroupName()
     return std::string();
 }
 
-// 辅助函数：获取地址所在模块名和RVA
-bool getModuleAndRva(duint addr, std::string& modName, duint& rva)
-{
-    duint base = Script::Module::BaseFromAddr(addr);
-    if (base)
-    {
-        char mod[MAX_MODULE_SIZE] = {0};
-        if (Script::Module::NameFromAddr(addr, mod))
-        {
-            modName = mod;
-            rva = addr - base;
-            return true;
-        }
-    }
-    return false;
-}
-
-// 辅助函数：根据模块名和RVA获取绝对地址
-bool getAddrFromModuleAndRva(const std::string& modName, duint rva, duint& addr)
-{
-    duint base = Script::Module::BaseFromName(modName.c_str());
-    if (base)
-    {
-        addr = base + rva;
-        return true;
-    }
-    return false;
-}
-
-// 修改导出配置：CPU分组导出模块名+RVA，memory分组导出绝对地址
 void exportConfig()
 {
     char filePath[MAX_PATH] = {0};
@@ -380,25 +349,12 @@ void exportConfig()
     {
         ofs << "[" << group.first << "]\n";
         for (duint addr : group.second)
-        {
-            if (group.first == "memory")
-            {
-                ofs << std::hex << addr << "\n";
-            }
-            else
-            {
-                std::string modName;
-                duint rva = 0;
-                if (getModuleAndRva(addr, modName, rva))
-                    ofs << modName << " " << std::hex << rva << "\n";
-            }
-        }
+            ofs << std::hex << addr << "\n";
     }
     ofs.close();
     _plugin_logprintf("Exported config to %s\n", filePath);
 }
 
-// 修改导入配置：CPU分组读取模块名+RVA，memory分组读取绝对地址
 void importConfig()
 {
     char filePath[MAX_PATH] = {0};
@@ -425,24 +381,11 @@ void importConfig()
         }
         else if (!curGroup.empty())
         {
-            if (curGroup == "memory")
-            {
-                duint addr = 0;
-                std::istringstream iss(line);
-                iss >> std::hex >> addr;
-                groupMap[curGroup].push_back(addr);
-                dumpAddrSet.insert(addr);
-            }
-            else
-            {
-                std::istringstream iss(line);
-                std::string modName;
-                duint rva = 0;
-                iss >> modName >> std::hex >> rva;
-                duint addr = 0;
-                if (getAddrFromModuleAndRva(modName, rva, addr))
-                    groupMap[curGroup].push_back(addr);
-            }
+            duint addr = 0;
+            std::istringstream iss(line);
+            iss >> std::hex >> addr;
+            groupMap[curGroup].push_back(addr);
+            if (curGroup == "memory") dumpAddrSet.insert(addr);
         }
     }
     ifs.close();

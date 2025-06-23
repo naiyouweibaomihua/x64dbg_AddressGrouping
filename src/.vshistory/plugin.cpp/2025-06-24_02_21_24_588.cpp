@@ -9,9 +9,6 @@
 #include <commctrl.h>
 #include "pluginsdk/_scriptapi_comment.h"
 #include <set>
-#include <fstream>
-#include <shlobj.h>
-#include "pluginsdk/_scriptapi_module.h"
 #pragma comment(lib, "comctl32.lib")
 using namespace Script::Debug;
 
@@ -37,9 +34,6 @@ std::map<std::string, std::vector<duint>> groupMap;
 #define MENU_ADD_TO_GROUP_DUMP   1002
 #define MENU_ADDGROUP_BASE 3000
 #define MENU_ADDGROUP_NEW (MENU_ADDGROUP_BASE + 0x7FFF)
-
-#define MENU_EXPORT_CONFIG 2004
-#define MENU_IMPORT_CONFIG 2005
 
 HWND hTree = NULL; // TreeView控件句柄
 
@@ -115,11 +109,8 @@ void pluginStop()
 void pluginSetup()
 {
     _plugin_menuaddentry(hMenu, MENU_MAINWINDOW_POPUP, "Plugin Template");
-    int hSubMenu = _plugin_menuadd(hMenu, "Config");
-    _plugin_menuaddentry(hSubMenu, MENU_EXPORT_CONFIG, "export config");
-    _plugin_menuaddentry(hSubMenu, MENU_IMPORT_CONFIG, "import config");
     _plugin_menuaddentry(hMenuDisasm, MENU_ADD_TO_GROUP_DISASM, "add code to group");
-    _plugin_menuaddentry(hMenuDump, MENU_ADD_TO_GROUP_DUMP, "add code to [memory] group");
+    _plugin_menuaddentry(hMenuDump, MENU_ADD_TO_GROUP_DUMP, "add code to group");
 }
 
 // 弹出空窗口并输出日志
@@ -334,122 +325,6 @@ std::string InputGroupName()
     return std::string();
 }
 
-// 辅助函数：获取地址所在模块名和RVA
-bool getModuleAndRva(duint addr, std::string& modName, duint& rva)
-{
-    duint base = Script::Module::BaseFromAddr(addr);
-    if (base)
-    {
-        char mod[MAX_MODULE_SIZE] = {0};
-        if (Script::Module::NameFromAddr(addr, mod))
-        {
-            modName = mod;
-            rva = addr - base;
-            return true;
-        }
-    }
-    return false;
-}
-
-// 辅助函数：根据模块名和RVA获取绝对地址
-bool getAddrFromModuleAndRva(const std::string& modName, duint rva, duint& addr)
-{
-    duint base = Script::Module::BaseFromName(modName.c_str());
-    if (base)
-    {
-        addr = base + rva;
-        return true;
-    }
-    return false;
-}
-
-// 修改导出配置：CPU分组导出模块名+RVA，memory分组导出绝对地址
-void exportConfig()
-{
-    char filePath[MAX_PATH] = {0};
-    OPENFILENAMEA ofn = {0};
-    ofn.lStructSize = sizeof(ofn);
-    ofn.lpstrFilter = "Text Files (*.txt)\0*.txt\0All Files (*.*)\0*.*\0";
-    ofn.lpstrFile = filePath;
-    ofn.nMaxFile = MAX_PATH;
-    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
-    ofn.lpstrTitle = "Export Config";
-    if (!GetSaveFileNameA(&ofn)) return;
-    std::ofstream ofs(filePath);
-    for (const auto& group : groupMap)
-    {
-        ofs << "[" << group.first << "]\n";
-        for (duint addr : group.second)
-        {
-            if (group.first == "memory")
-            {
-                ofs << std::hex << addr << "\n";
-            }
-            else
-            {
-                std::string modName;
-                duint rva = 0;
-                if (getModuleAndRva(addr, modName, rva))
-                    ofs << modName << " " << std::hex << rva << "\n";
-            }
-        }
-    }
-    ofs.close();
-    _plugin_logprintf("Exported config to %s\n", filePath);
-}
-
-// 修改导入配置：CPU分组读取模块名+RVA，memory分组读取绝对地址
-void importConfig()
-{
-    char filePath[MAX_PATH] = {0};
-    OPENFILENAMEA ofn = {0};
-    ofn.lStructSize = sizeof(ofn);
-    ofn.lpstrFilter = "Text Files (*.txt)\0*.txt\0All Files (*.*)\0*.*\0";
-    ofn.lpstrFile = filePath;
-    ofn.nMaxFile = MAX_PATH;
-    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
-    ofn.lpstrTitle = "Import Config";
-    if (!GetOpenFileNameA(&ofn)) return;
-    std::ifstream ifs(filePath);
-    if (!ifs) return;
-    groupMap.clear();
-    dumpAddrSet.clear();
-    std::string line, curGroup;
-    while (std::getline(ifs, line))
-    {
-        if (line.empty()) continue;
-        if (line.front() == '[' && line.back() == ']')
-        {
-            curGroup = line.substr(1, line.size() - 2);
-            groupMap[curGroup] = {};
-        }
-        else if (!curGroup.empty())
-        {
-            if (curGroup == "memory")
-            {
-                duint addr = 0;
-                std::istringstream iss(line);
-                iss >> std::hex >> addr;
-                groupMap[curGroup].push_back(addr);
-                dumpAddrSet.insert(addr);
-            }
-            else
-            {
-                std::istringstream iss(line);
-                std::string modName;
-                duint rva = 0;
-                iss >> modName >> std::hex >> rva;
-                duint addr = 0;
-                if (getAddrFromModuleAndRva(modName, rva, addr))
-                    groupMap[curGroup].push_back(addr);
-            }
-        }
-    }
-    ifs.close();
-    refreshMainWindow();
-    _plugin_logprintf("Imported config from %s\n", filePath);
-}
-
 // 在分组有变化时刷新窗口和TreeView
 extern "C" __declspec(dllexport) void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENTRY* info)
 {
@@ -465,12 +340,6 @@ extern "C" __declspec(dllexport) void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENT
             bIsMainWindowShow = true;
         }
         break;
-    case MENU_EXPORT_CONFIG:
-        exportConfig();
-        break;
-    case MENU_IMPORT_CONFIG:
-        importConfig();
-        break;
     case MENU_ADD_TO_GROUP_DISASM:
         addr = Script::Gui::Disassembly::SelectionGetStart();
         isDump = false;
@@ -478,6 +347,7 @@ extern "C" __declspec(dllexport) void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENT
     case MENU_ADD_TO_GROUP_DUMP:
         addr = Script::Gui::Dump::SelectionGetStart();
         isDump = true;
+        // 直接添加到 memory 分组
         groupMap["memory"].push_back(addr);
         dumpAddrSet.insert(addr);
         refreshMainWindow();
@@ -489,7 +359,7 @@ extern "C" __declspec(dllexport) void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENT
             int idx = 0;
             for (const auto& group : groupMap)
             {
-                if (group.first == "memory") continue;
+                if (group.first == "memory") continue; // 不让Disasm窗口添加到memory分组
                 AppendMenuA(hMenu, MF_STRING, MENU_ADDGROUP_BASE + idx, group.first.c_str());
                 idx++;
             }
@@ -504,6 +374,7 @@ extern "C" __declspec(dllexport) void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENT
                 int groupIdx = sel - MENU_ADDGROUP_BASE;
                 auto it = groupMap.begin();
                 int skip = 0;
+                // 跳过memory分组
                 for (; it != groupMap.end(); ++it)
                 {
                     if (it->first == "memory") continue;
