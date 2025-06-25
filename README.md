@@ -6,6 +6,8 @@
 
 This plugin provides powerful address grouping and management features for the x64dbg debugger. It allows you to group, annotate, and manage addresses from the disassembly, memory, and stack windows, greatly improving debugging efficiency.
 
+<img src="./AddressGrouping.png" style="zoom:50%">
+
 ## Main Features
 
 - **Address Group Management**: Create custom groups and add addresses to any group (e.g., memory, stack, CPU, etc.).
