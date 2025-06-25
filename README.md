@@ -1,3 +1,5 @@
+[中文说明请点击这里 (README_zh.md)](README_zh.md) 
+
 # x64dbg Address Grouping Plugin
 
 ## Introduction
