@@ -27,7 +27,7 @@ endif()
 include("cmake/msvc-static-runtime.cmake")
 include("cmake/msvc-configurations.cmake")
 
-project(PluginTemplate)
+project(AddressGrouping)
 
 include(FetchContent)
 
@@ -46,8 +46,8 @@ FetchContent_MakeAvailable(x64dbg)
 
 include("cmake/x64dbg.cmake")
 
-# Target: PluginTemplate
-set(PluginTemplate_SOURCES
+# Target: AddressGrouping
+set(AddressGrouping_SOURCES
 	"src/plugin.cpp"
 	"src/pluginmain.cpp"
 	"src/plugin.h"
@@ -55,8 +55,8 @@ set(PluginTemplate_SOURCES
 	cmake.toml
 )
 
-x64dbg_plugin(PluginTemplate)
+x64dbg_plugin(AddressGrouping)
 
-target_sources(PluginTemplate PRIVATE ${PluginTemplate_SOURCES})
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${PluginTemplate_SOURCES})
+target_sources(AddressGrouping PRIVATE ${AddressGrouping_SOURCES})
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${AddressGrouping_SOURCES})
 
