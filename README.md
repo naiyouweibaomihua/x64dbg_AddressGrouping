@@ -1,51 +1,49 @@
-# PluginTemplate
+# x64dbg Address Grouping Plugin
 
-Template CMake project for x64dbg plugins. This uses [cmkr](https://cmkr.build), `cmake.toml` contains the project configuration.
+## Introduction
 
-## Using the template
+This plugin provides powerful address grouping and management features for the x64dbg debugger. It allows you to group, annotate, and manage addresses from the disassembly, memory, and stack windows, greatly improving debugging efficiency.
 
-You can click the green *Use this template* button. See the article [*Creating a repository from a template*
-](https://docs.github.com/en/free-pro-team@latest/github/creating-cloning-and-archiving-repositories/creating-a-repository-from-a-template) by GitHub for more details.
+## Main Features
 
-Alternatively you can download a ZIP of this repository and set up the template locally.
+- **Address Group Management**: Create custom groups and add addresses to any group (e.g., memory, stack, CPU, etc.).
+- **Multi-Window Support**: Add selected addresses from the disassembly, memory, or stack windows directly to groups.
+- **Tree View Display**: All groups and addresses are displayed in a hierarchical tree structure, supporting multi-level child nodes (call chains/relations).
+- **Annotations**: Add comments to any address, with green-highlighted annotation display.
+- **Child Node Management**: Add child nodes to any address to build call chains or data relationships.
+- **Group/Address Deletion**: Quickly delete groups or addresses via the context menu.
+- **Import/Export Groups**: Export all groups, annotations, and child node relationships to a text file, and import them back at any time.
+- **Breakpoint Integration**: Easily set or remove breakpoints by checking/unchecking nodes.
 
-## Getting started
+## Usage
 
-- Pretty much all of the available functionality can be found in [`bridgemain.h`](https://github.com/x64dbg/x64dbg/blob/97ff1ec98a5bbf543e6d80ebbbd2401edf6c8cca/src/bridge/bridgemain.h).
-- You can find some (commented) example code in [`src/plugin.cpp`](./src/plugin.cpp).
-- Example plugins: https://plugins.x64dbg.com.
-- References:
-  - https://help.x64dbg.com/en/latest/developers/plugins/index.html
-  - https://x64dbg.com/blog/2016/10/04/architecture-of-x64dbg.html
-  - https://x64dbg.com/blog/2016/10/20/threading-model.html
-  - https://x64dbg.com/blog/2016/07/30/x64dbg-plugin-sdk.html
+1. **Load the Plugin**: Copy the compiled DLL to the `plugins` directory of x64dbg and restart x64dbg.
+2. **Main Menu Entry**: Find the "Address Grouping" entry under the "Plugins" menu in x64dbg.
+3. **Group Management Window**: Click to open the main window, where all groups and addresses are shown in a tree view.
+4. **Add Address to Group**:
+   - Select an address in the disassembly, memory, or stack window, then right-click and choose "add ... to group".
+   - You can also add child nodes via the context menu in the main window.
+5. **Annotations & Deletion**: Right-click address nodes to add annotations, delete addresses, or add child nodes.
+6. **Import/Export**: Use the main window menu to import/export group configurations.
 
-## Building
+## Highlights
+- The `memory` and `stack` groups are dedicated to the memory and stack windows, and double-clicking nodes will jump to the corresponding window.
+- Supports multi-level child nodes, ideal for managing call chains, data flows, and complex relationships.
+- Simple and intuitive user interface.
 
-From a Visual Studio command prompt:
+## Planned/Upcoming Features
+- Annotation green highlighting (not currently supported, will be improved in future versions).
 
-```
-cmake -B build64 -A x64
-cmake --build build64 --config Release
-```
+## Installation
+1. Build the project to generate the DLL file.
+2. Copy the DLL to the `plugins` directory of x64dbg.
+3. Restart x64dbg to load the plugin automatically.
 
-You will get `build64\PluginTemplate.sln` that you can open in Visual Studio.
+## Compatibility
+- Supports the latest version of x64dbg. Recommended for use on Windows 10/11.
 
-To build a 32-bit plugin:
+## License
+This project is licensed under the MIT License. Contributions are welcome.
 
-```
-cmake -B build32 -A Win32
-cmake --build build32 --config Release
-```
-
-Alternatively you can open this folder in Visual Studio/CLion/Qt Creator.
-
-![building animation](https://github.com/x64dbg/PluginTemplate/blob/3951eb4b320b7a26164616ab5141414e8cd5b0a1/building.gif?raw=true)
-
-## Creating releases
-
-This template has GitHub Actions set up in [`.github/workflows/build.yml`](./.github/workflows/build.yml). If you push a tag prefixed with `v` (for instance `v1.0`) it will automatically publish a GitHub release with the plugin binaries compiled for both architectures.
-
-## Automatic reloading
-
-You can set up the [PluginDevHelper](https://github.com/x64dbg/PluginDevHelper) utility to automatically unload and reload the plugin from x64dbg when compiling. See the README there for more detailled instructions.
+## Contact
+For suggestions or bug reports, please submit an Issue on the GitHub repository. 
