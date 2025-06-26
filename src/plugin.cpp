@@ -411,17 +411,34 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 						else if (sel == ID_MENU_ADD_CHILD_ADDR)
 						{
 							duint childAddr = 0;
+							bool valid = false;
 							if (strcmp(parentText, "memory") == 0)
-								childAddr = Script::Gui::Dump::SelectionGetStart();
-							else if (strcmp(parentText, "stack") == 0)
-								childAddr = Script::Gui::Stack::SelectionGetStart();
-							else
-								childAddr = Script::Gui::Disassembly::SelectionGetStart();
-							if (childAddr)
 							{
-								childMap[(duint)item.lParam].push_back(childAddr);
-								refreshMainWindow();
+								childAddr = Script::Gui::Dump::SelectionGetStart();
+								valid = (childAddr != 0);
 							}
+							else if (strcmp(parentText, "stack") == 0)
+							{
+								childAddr = Script::Gui::Stack::SelectionGetStart();
+								valid = (childAddr != 0);
+							}
+							else
+							{
+								childAddr = Script::Gui::Disassembly::SelectionGetStart();
+								valid = (childAddr != 0);
+							}
+							if (!valid)
+							{
+								MessageBoxA(hwnd, "Please select a valid address in the corresponding window before adding a child node!", "Tip", MB_OK | MB_ICONWARNING);
+								break;
+							}
+							if ((duint)item.lParam == childAddr)
+							{
+								MessageBoxA(hwnd, "Cannot add the node itself as its child!", "Tip", MB_OK | MB_ICONWARNING);
+								break;
+							}
+							childMap[(duint)item.lParam].push_back(childAddr);
+							refreshMainWindow();
 						}
 						else if (sel == ID_MENU_DELETE_ADDR)
 						{
