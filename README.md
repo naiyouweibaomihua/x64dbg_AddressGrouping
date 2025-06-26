@@ -8,6 +8,21 @@ This plugin provides powerful address grouping and management features for the x
 
 <img src="./AddressGrouping.png" style="zoom:50%">
 
+## Version History
+
+### v1.1 (Latest)
+- **Enhanced Window Size**: Increased default window size to 1000x800 for better visibility
+- **Improved Chinese Character Support**: Better handling of Chinese comments and group names
+- **Bug Fixes**: 
+  - Fixed crashes when adding child nodes with invalid addresses
+  - Resolved issues with Chinese character encoding in comments
+  - Fixed TreeView control compatibility issues
+- **Code Optimization**: Improved TreeView refresh logic and memory management
+- **Better Error Handling**: Added validation for address selection before adding child nodes
+
+### v1.0
+- Initial release with core address grouping functionality
+
 ## Main Features
 
 - **Address Group Management**: Create custom groups and add addresses to any group (e.g., memory, stack, CPU, etc.).
@@ -18,6 +33,7 @@ This plugin provides powerful address grouping and management features for the x
 - **Group/Address Deletion**: Quickly delete groups or addresses via the context menu.
 - **Import/Export Groups**: Export all groups, annotations, and child node relationships to a text file, and import them back at any time.
 - **Breakpoint Integration**: Easily set or remove breakpoints by checking/unchecking nodes.
+- **Internationalization Support**: Better support for Chinese and other non-ASCII characters in comments and group names.
 
 ## Usage
 
@@ -34,9 +50,12 @@ This plugin provides powerful address grouping and management features for the x
 - The `memory` and `stack` groups are dedicated to the memory and stack windows, and double-clicking nodes will jump to the corresponding window.
 - Supports multi-level child nodes, ideal for managing call chains, data flows, and complex relationships.
 - Simple and intuitive user interface.
+- Enhanced window size provides better visibility for complex debugging scenarios.
+- Improved character encoding support for international users.
 
 ## Planned/Upcoming Features
 - Annotation green highlighting (not currently supported, will be improved in future versions).
+- Additional language support and localization.
 
 ## Installation
 1. Build the project to generate the DLL file.
@@ -45,6 +64,7 @@ This plugin provides powerful address grouping and management features for the x
 
 ## Compatibility
 - Supports the latest version of x64dbg. Recommended for use on Windows 10/11.
+- Improved compatibility with various character encodings and international locales.
 
 ## License
 This project is licensed under the MIT License. Contributions are welcome.

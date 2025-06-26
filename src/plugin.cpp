@@ -14,6 +14,8 @@
 #include "pluginsdk/_scriptapi_module.h"
 #include "pluginsdk/_scriptapi_stack.h"
 #include <algorithm>
+#include <locale>
+#include <codecvt>
 #pragma comment(lib, "comctl32.lib")
 using namespace Script::Debug;
 
@@ -32,19 +34,19 @@ bool bIsMainWindowShow = false;
 HWND hMain = NULL;
 HINSTANCE g_hInstance = NULL;
 
-// å­˜å‚¨æ–­ç‚¹ä¿¡æ¯
+// ´æ´¢¶ÏµãĞÅÏ¢
 std::string g_breakpointInfo;
 
-// åˆ†ç»„ç®¡ç†æ•°æ®ç»“æ„
+// Êı¾İ½á¹¹
 std::map<std::string, std::vector<duint>> groupMap;
 
-// æ¯ä¸ªåœ°å€çš„å­èŠ‚ç‚¹ï¼ˆè°ƒç”¨é“¾ï¼‰
+// Ã¿¸öµØÖ·½Úµã¶ÔÓ¦µÄ×Ó½Úµã
 std::map<duint, std::vector<duint>> childMap;
 
-// ä¸»çª—å£å¼¹çª—èœå•ID
+// Ö÷²Ëµ¥ID
 #define MENU_MAINWINDOW_POPUP 0
 
-// æ–°èœå•é¡¹ID
+// ×Ó²Ëµ¥ID
 #define MENU_ADD_TO_GROUP_DISASM 1001
 #define MENU_ADD_TO_GROUP_DUMP   1002
 #define MENU_ADDGROUP_BASE 3000
@@ -55,28 +57,32 @@ std::map<duint, std::vector<duint>> childMap;
 #define MENU_ADD_TO_GROUP_STACK 1003
 #define MENU_ABOUT 2006
 
-HWND hTree = NULL; // TreeViewæ§ä»¶å¥æŸ„
+HWND hTree = NULL; // TreeView¾ä±ú
 
 std::set<duint> dumpAddrSet;
 
 #define WM_SET_BREAKPOINT (WM_USER + 100)
 
-// å…¨å±€ç°è‰²ç”»åˆ·
+// È«ÆÁË¢±³¾°
 HBRUSH hBrushGray = NULL;
 
-// æ‰€æœ‰åˆ†ç»„å­èŠ‚ç‚¹å¤‡æ³¨
+// ×¢ÊÍĞÅÏ¢
 std::map<duint, std::string> addrComments;
+
+// utf8×ªgbkÉùÃ÷
+std::string Utf8ToGbk(const std::string& utf8);
 
 void expandAllTree();
 void collapseAllTree();
 void insertAddressNode(const std::string& groupName, HTREEITEM hParent, duint addr, TVINSERTSTRUCTA& tvi);
 
-// åˆ·æ–°TreeViewå†…å®¹
+// Ë¢ĞÂTreeViewÊı¾İ£¬A°æµ÷ÓÃ
 void refreshTreeView()
 {
 	if (!hTree)
 		return;
 	TreeView_DeleteAllItems(hTree);
+	// É¾³ı²âÊÔ´úÂë£¬Ö»±£ÁôÊµ¼Ê·Ö×é²åÈëÂß¼­
 	TVINSERTSTRUCTA tvi = { 0 };
 	for (const auto& group : groupMap)
 	{
@@ -85,12 +91,12 @@ void refreshTreeView()
 		tvi.item.mask = TVIF_TEXT;
 		tvi.item.pszText = (LPSTR)group.first.c_str();
 		HTREEITEM hGroup = TreeView_InsertItem(hTree, &tvi);
-		// éšè—åˆ†ç»„èŠ‚ç‚¹CheckBox
+		// Òş²Ø·Ö×é½ÚµãCheckBox
 		TVITEMA groupItem = { 0 };
 		groupItem.mask = TVIF_HANDLE | TVIF_STATE;
 		groupItem.hItem = hGroup;
 		groupItem.stateMask = TVIS_STATEIMAGEMASK;
-		groupItem.state = INDEXTOSTATEIMAGEMASK(0); // 0=éšè—
+		groupItem.state = INDEXTOSTATEIMAGEMASK(0); // 0=Òş²Ø
 		TreeView_SetItem(hTree, &groupItem);
 		for (duint addr : group.second)
 		{
@@ -106,7 +112,7 @@ void refreshMainWindow()
 		InvalidateRect(hMain, NULL, TRUE);
 		UpdateWindow(hMain);
 		refreshTreeView();
-		expandAllTree(); // åˆ·æ–°åè‡ªåŠ¨å±•å¼€æ‰€æœ‰èŠ‚ç‚¹
+		expandAllTree(); // ×Ô¶¯Õ¹¿ªËùÓĞ×Ó½Úµã
 	}
 }
 
@@ -136,18 +142,18 @@ void pluginSetup()
 	_plugin_menuaddentry(hMenuDisasm, MENU_ADD_TO_GROUP_DISASM, "add code to group");
 	_plugin_menuaddentry(hMenuDump, MENU_ADD_TO_GROUP_DUMP, "add code to [memory] group");
 	_plugin_menuaddentry(hMenuStack, MENU_ADD_TO_GROUP_STACK, "add stack address to [stack] group");
-	// Aboutèœå•é¡¹æ·»åŠ åˆ°ä¸»èœå•æœ€å
+	// About²Ëµ¥ÏîÌí¼Óµ½Ö÷²Ëµ¥
 	_plugin_menuaddentry(hMenu, MENU_ABOUT, "About");
 }
 
-// å¼¹å‡ºç©ºçª—å£å¹¶è¾“å‡ºæ—¥å¿—
+// ´´½¨Ïß³Ì
 DWORD WINAPI MsgLoopThread(LPVOID)
 {
 	MSG msg;
 	WNDCLASSA wc = { 0 };
 	HWND hwnd;
 
-	// åˆå§‹åŒ–ç°è‰²ç”»åˆ·
+	// ³õÊ¼»¯±³¾°Ë¢
 	if (!hBrushGray)
 		hBrushGray = CreateSolidBrush(RGB(200, 200, 200));
 
@@ -168,15 +174,15 @@ DWORD WINAPI MsgLoopThread(LPVOID)
 		"AddressGroupingWindow",
 		"Address Grouping",
 		WS_OVERLAPPEDWINDOW,
-		100, 100, 600, 500, // å®½600, é«˜500
+		100, 100, 600, 500, // ¿í600, ¸ß500
 		NULL, NULL, g_hInstance, NULL
 	);
 
-	hMain = hwnd; // ä¿å­˜ä¸»çª—å£å¥æŸ„
+	hMain = hwnd; // ±£´æÖ÷´°¿Ú¾ä±ú
 
 	ShowWindow(hwnd, SW_SHOW);
 	UpdateWindow(hwnd);
-	refreshTreeView(); // è‡ªåŠ¨åˆ·æ–°ä¸€æ¬¡ï¼Œç¡®ä¿åˆ†ç»„èŠ‚ç‚¹checkboxæ¶ˆå¤±
+	refreshTreeView(); // ×Ô¶¯Ë¢ĞÂÒ»´Î£¬È·±£½Úµãcheckbox²»Ê§
 
 	while (GetMessage(&msg, NULL, 0, 0))
 	{
@@ -225,7 +231,7 @@ void collapseAllTree()
 	}
 }
 
-// è·å–æŸèŠ‚ç‚¹çš„é¡¶çº§åˆ†ç»„å
+// »ñÈ¡Ä³¸ö½Úµã¶ÔÓ¦µÄ¸ù½Úµã×éÃû
 std::string GetRootGroupName(HTREEITEM hItem)
 {
 	HTREEITEM hParent = TreeView_GetParent(hTree, hItem);
@@ -245,7 +251,7 @@ std::string GetRootGroupName(HTREEITEM hItem)
 	return std::string(text);
 }
 
-// ä¿®æ”¹çª—å£è¿‡ç¨‹ï¼Œé›†æˆTreeViewæ§ä»¶
+// ĞŞ¸Ä¹ØÁª£¬ĞŞ¸ÄTreeView¾ä±ú
 LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (iMsg)
@@ -256,7 +262,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 		InitCommonControlsEx(&icex);
 		hTree = CreateWindowExA(0, WC_TREEVIEWA, "", WS_VISIBLE | WS_CHILD | WS_BORDER | TVS_HASLINES | TVS_LINESATROOT | TVS_HASBUTTONS | TVS_CHECKBOXES,
 			0, 0, 480, 360, hwnd, (HMENU)100, GetModuleHandle(NULL), NULL);
-		// è®¾ç½®TreeViewæ§ä»¶èƒŒæ™¯ä¸ºç°è‰²
+		// ÉèÖÃTreeView¾ä±úÎª»ÒÉ«
 		TreeView_SetBkColor(hTree, RGB(200, 200, 200));
 		refreshTreeView();
 	}
@@ -269,7 +275,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 		break;
 	case WM_CONTEXTMENU:
 	{
-		// åªåœ¨é¼ æ ‡å³é”®å¼¹å‡ºæ—¶å¤„ç†ï¼Œé¿å…é‡å¤å¼¹å‡º
+		// Ö»ÔÊĞíÔÚTreeViewÉÏµã»÷µÄ½Úµã
 		if (GetFocus() != hwnd && GetFocus() != hTree) break;
 		HMENU hMenu = CreatePopupMenu();
 		AppendMenuA(hMenu, MF_STRING, ID_MENU_REFRESH, "Refresh");
@@ -278,7 +284,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 		POINT pt;
 		pt.x = LOWORD(lParam);
 		pt.y = HIWORD(lParam);
-		if (pt.x == -1 && pt.y == -1) // é”®ç›˜å¼¹å‡º
+		if (pt.x == -1 && pt.y == -1) // ÓÒ¼ü²Ëµ¥
 		{
 			RECT rect;
 			GetWindowRect(hwnd, &rect);
@@ -320,10 +326,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 					item.mask = TVIF_HANDLE | TVIF_STATE | TVIF_PARAM;
 					item.hItem = ht.hItem;
 					TreeView_GetItem(hTree, &item);
-					// åˆ¤æ–­æ˜¯å¦ç‚¹å‡»åœ¨CheckBoxä¸Š
+					// ÅĞ¶ÏÊÇ·ñÊÇCheckBox
 					if ((ht.flags & TVHT_ONITEMSTATEICON) && item.lParam != 0)
 					{
-						// è·å–çˆ¶èŠ‚ç‚¹æ–‡æœ¬
+						// »ñÈ¡½Úµã¸¸½Úµã
 						HTREEITEM hParent = TreeView_GetParent(hTree, ht.hItem);
 						if (hParent)
 						{
@@ -336,15 +342,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 							TreeView_GetItem(hTree, &parentItem);
 							if (strcmp(parentText, "memory") != 0)
 							{
-								// åˆ‡æ¢CheckBoxçŠ¶æ€
+								// ĞŞ¸ÄCheckBox×´Ì¬
 								bool checked = ((item.state & TVIS_STATEIMAGEMASK) >> 12) == 2;
-								if (!checked) // ä¹‹å‰æœªé€‰ä¸­ï¼Œç‚¹å‡»åä¼šå˜ä¸ºé€‰ä¸­
+								if (!checked) // Ö®Ç°Î´Ñ¡ÖĞ£¬ÉèÎªÑ¡ÖĞ
 								{
 									PostMessage(hwnd, WM_SET_BREAKPOINT, (WPARAM)item.lParam, 0);
 								}
-								else // ä¹‹å‰å·²é€‰ä¸­ï¼Œç‚¹å‡»åä¼šå˜ä¸ºæœªé€‰ä¸­
+								else // Ö®Ç°Ñ¡ÖĞ£¬ÉèÎªÎ´Ñ¡ÖĞ
 								{
-									// ç¦ç”¨æ–­ç‚¹
+									// Ö´ĞĞÅĞ¶Ï
 									char cmd[64];
 									sprintf(cmd, "bd 0x%llX", (unsigned long long)item.lParam);
 									DbgCmdExecDirect(cmd);
@@ -374,7 +380,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 					TreeView_GetItem(hTree, &item);
 					HTREEITEM hParent = TreeView_GetParent(hTree, ht.hItem);
 					char parentText[256] = { 0 };
-					if (hParent) // å­èŠ‚ç‚¹
+					if (hParent) // ×Ó½Úµã
 					{
 						TVITEMA parentItem = { 0 };
 						parentItem.mask = TVIF_TEXT | TVIF_HANDLE;
@@ -399,10 +405,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 							auto it = addrComments.find(item.lParam);
 							if (it != addrComments.end())
 								strncpy(comment, it->second.c_str(), sizeof(comment) - 1);
-							if (Script::Gui::InputLine("è¾“å…¥å¤‡æ³¨(ç•™ç©ºåˆ é™¤)", comment))
+							if (Script::Gui::InputLine(u8"ÊäÈë±¸×¢(ÊäÈëÉ¾³ı)", comment))
 							{
+								std::string commentStr(comment); // ÓÃ¹¹Ôìº¯Êı
+								commentStr = Utf8ToGbk(commentStr); // ×ªÂë
 								if (strlen(comment) > 0)
-									addrComments[item.lParam] = comment;
+									addrComments[item.lParam] = commentStr;
 								else
 									addrComments.erase(item.lParam);
 								refreshMainWindow();
@@ -442,7 +450,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 						}
 						else if (sel == ID_MENU_DELETE_ADDR)
 						{
-							// æ‰¾åˆ°çˆ¶åˆ†ç»„å
+							// ÕÒµ½×Ó½Úµã
 							TVITEMA parentItem = { 0 };
 							parentItem.mask = TVIF_TEXT | TVIF_HANDLE;
 							parentItem.hItem = hParent;
@@ -469,7 +477,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 						SetWindowLongPtr(hwnd, DWLP_MSGRESULT, TRUE);
 						return TRUE;
 					}
-					else // åˆ†ç»„èŠ‚ç‚¹
+					else // ¸¸½Úµã
 					{
 						HMENU hMenu = CreatePopupMenu();
 						AppendMenuA(hMenu, MF_STRING, ID_MENU_DELETE_GROUP, "delete group");
@@ -496,7 +504,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 						return TRUE;
 					}
 				}
-				// æ²¡ç‚¹åˆ°èŠ‚ç‚¹æ—¶å¼¹å‡ºå…¨å±€èœå•
+				// ÓÒ¼üµã»÷µ½½ÚµãÊ±È«Ñ¡ËùÓĞ½Úµã
 				HMENU hMenu = CreatePopupMenu();
 				AppendMenuA(hMenu, MF_STRING, ID_MENU_REFRESH, "Refresh");
 				AppendMenuA(hMenu, MF_STRING, ID_MENU_EXPANDALL, "Expand All");
@@ -515,7 +523,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 				TreeView_HitTest(hTree, &ht);
 				if (ht.hItem)
 				{
-					// å¦‚æœæ˜¯åˆ†ç»„èŠ‚ç‚¹ï¼ˆæ ¹èŠ‚ç‚¹ï¼‰ï¼Œé˜»æ­¢æŠ˜å /å±•å¼€
+					// ÅĞ¶ÏÊÇ·ñÊÇ½Úµã£¨×Ó½Úµã£©£¬×èÖ¹Õ¹¿ª/ÕÛµş
 					if (!TreeView_GetParent(hTree, ht.hItem))
 					{
 						SetWindowLongPtr(hwnd, DWLP_MSGRESULT, TRUE);
@@ -528,18 +536,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 					item.pszText = text;
 					item.cchTextMax = sizeof(text) - 1;
 					TreeView_GetItem(hTree, &item);
-					// è·å–é¡¶çº§åˆ†ç»„å
+					// »ñÈ¡ËùÓĞ×Ó½Úµã
 					std::string groupName = GetRootGroupName(ht.hItem);
 					if (groupName == "memory")
 					{
-						// è·³è½¬åˆ°å†…å­˜çª—å£
+						// ×ªµ½ÄÚ´æ
 						char cmd[64];
 						sprintf(cmd, "dump 0x%llX", (unsigned long long)item.lParam);
 						DbgCmdExecDirect(cmd);
 					}
 					else if (groupName == "stack")
 					{
-						// è·³è½¬åˆ°æ ˆçª—å£ï¼ˆå¼¹çª—æç¤ºï¼Œå› æ— APIï¼‰
+						// ×ªµ½¶ÑÏÔÊ¾Ê¹ÓÃAPI
 						MessageBoxA(hwnd, "Please locate this address manually in the stack window.", "Tip", MB_OK | MB_ICONINFORMATION);
 					}
 					else
@@ -577,16 +585,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 	return DefWindowProcA(hwnd, iMsg, wParam, lParam);
 }
 
-// å¼¹çª—è¾“å…¥åˆ†ç»„å
+// ÊäÈë×éÃû
 std::string InputGroupName()
 {
 	char buf[128] = { 0 };
-	if (Script::Gui::InputLine("Input group name", buf))
+	if (Script::Gui::InputLine(u8"Input group name", buf))
 		return std::string(buf);
 	return std::string();
 }
 
-// è¾…åŠ©å‡½æ•°ï¼šè·å–åœ°å€æ‰€åœ¨æ¨¡å—åå’ŒRVA
+// »ñÈ¡Ä£¿éRVA£¬·µ»ØÄ£¿éÃûºÍRVA
 bool getModuleAndRva(duint addr, std::string& modName, duint& rva)
 {
 	duint base = Script::Module::BaseFromAddr(addr);
@@ -603,7 +611,7 @@ bool getModuleAndRva(duint addr, std::string& modName, duint& rva)
 	return false;
 }
 
-// è¾…åŠ©å‡½æ•°ï¼šæ ¹æ®æ¨¡å—åå’ŒRVAè·å–ç»å¯¹åœ°å€
+// »ñÈ¡Ä£¿éRVA£¬·µ»ØµØÖ·
 bool getAddrFromModuleAndRva(const std::string& modName, duint rva, duint& addr)
 {
 	duint base = Script::Module::BaseFromName(modName.c_str());
@@ -615,7 +623,7 @@ bool getAddrFromModuleAndRva(const std::string& modName, duint rva, duint& addr)
 	return false;
 }
 
-// ä¿®æ”¹å¯¼å‡ºé…ç½®ï¼šCPUåˆ†ç»„å¯¼å‡ºæ¨¡å—å+RVAï¼Œmemoryåˆ†ç»„å¯¼å‡ºç»å¯¹åœ°å€
+// µ¼³öÅäÖÃ£¬CPUÄ£¿é+RVA£¬memoryµØÖ·
 void exportConfig()
 {
 	char filePath[MAX_PATH] = { 0 };
@@ -646,14 +654,14 @@ void exportConfig()
 			}
 		}
 	}
-	// å¯¼å‡ºå¤‡æ³¨
+	// Ìí¼Ó×¢ÊÍ
 	ofs << "[comments]\n";
 	for (const auto& kv : addrComments)
 	{
 		if (!kv.second.empty())
 			ofs << "0x" << std::hex << kv.first << "=" << kv.second << "\n";
 	}
-	// å¯¼å‡ºå­èŠ‚ç‚¹å…³ç³»
+	// Ìí¼Ó×Ó½Úµã¹ØÁª
 	ofs << "[children]\n";
 	for (const auto& kv : childMap)
 	{
@@ -673,7 +681,7 @@ void exportConfig()
 	_plugin_logprintf("Exported config to %s\n", filePath);
 }
 
-// ä¿®æ”¹å¯¼å…¥é…ç½®ï¼šCPUåˆ†ç»„è¯»å–æ¨¡å—å+RVAï¼Œmemoryåˆ†ç»„è¯»å–ç»å¯¹åœ°å€
+// µ¼ÈëÅäÖÃ£¬CPUÄ£¿é+RVA£¬memoryµØÖ·
 void importConfig()
 {
 	char filePath[MAX_PATH] = { 0 };
@@ -708,7 +716,7 @@ void importConfig()
 		}
 		if (inComments)
 		{
-			// è§£æ0xåœ°å€=å¤‡æ³¨
+			// µØÖ·=×¢ÊÍ
 			size_t eq = line.find('=');
 			if (eq != std::string::npos)
 			{
@@ -725,7 +733,7 @@ void importConfig()
 		}
 		if (inChildren)
 		{
-			// è§£æ0xçˆ¶=0xå­1,0xå­2,...
+			// 0x=0x1,0x2,...
 			size_t eq = line.find('=');
 			if (eq != std::string::npos)
 			{
@@ -779,7 +787,7 @@ void importConfig()
 	_plugin_logprintf("Imported config from %s\n", filePath);
 }
 
-// åœ¨åˆ†ç»„æœ‰å˜åŒ–æ—¶åˆ·æ–°çª—å£å’ŒTreeView
+// µ±ÅäÖÃ±ä»¯Ê±Ë¢ĞÂTreeView
 extern "C" __declspec(dllexport) void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENTRY * info)
 {
 	duint addr = 0;
@@ -873,6 +881,7 @@ extern "C" __declspec(dllexport) void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENT
 				std::string groupName = InputGroupName();
 				if (!groupName.empty())
 				{
+					groupName = Utf8ToGbk(groupName); // ×ªÂë
 					groupMap[groupName].push_back(addr);
 					refreshMainWindow();
 					_plugin_logprintf("Added 0x%p to new group [%s]\n", (void*)addr, groupName.c_str());
@@ -889,7 +898,7 @@ void insertAddressNode(const std::string& groupName, HTREEITEM hParent, duint ad
 	char buf[64];
 	sprintf(buf, "0x%llX", (unsigned long long)addr);
 	display = buf;
-	// ä¼˜å…ˆæ˜¾ç¤ºå¤‡æ³¨ï¼Œæ²¡æœ‰åˆ™æ˜¾ç¤ºx64dbgæ³¨é‡Š
+	// ÏÔÊ¾×¢ÊÍ£ºÃ»ÓĞ×¢ÊÍÏÔÊ¾x64dbg×¢ÊÍ
 	auto it = addrComments.find(addr);
 	if (it != addrComments.end() && !it->second.empty()) {
 		display += " // ";
@@ -900,7 +909,7 @@ void insertAddressNode(const std::string& groupName, HTREEITEM hParent, duint ad
 		if (Script::Comment::Get(addr, comment) && comment[0])
 		{
 			display += " // ";
-			display += comment;
+			display += Utf8ToGbk(std::string(comment)); // ×ªÂë£¬·ÀÖ¹x64dbg×¢ÊÍÖĞÎÄÂÒÂë
 		}
 	}
 	tvi.hParent = hParent;
@@ -913,14 +922,26 @@ void insertAddressNode(const std::string& groupName, HTREEITEM hParent, duint ad
 		item.mask = TVIF_HANDLE | TVIF_STATE;
 		item.hItem = hItem;
 		item.stateMask = TVIS_STATEIMAGEMASK;
-		item.state = INDEXTOSTATEIMAGEMASK(1); // æœªé€‰ä¸­
+		item.state = INDEXTOSTATEIMAGEMASK(1); // Î´Ñ¡ÖĞ
 		TreeView_SetItem(hTree, &item);
 	}
-	// é€’å½’æ’å…¥å­èŠ‚ç‚¹
+	// µİ¹é²åÈë×Ó½Úµã
 	auto childIt = childMap.find(addr);
 	if (childIt != childMap.end()) {
 		for (duint childAddr : childIt->second) {
 			insertAddressNode(groupName, hItem, childAddr, tvi);
 		}
 	}
+}
+
+std::string Utf8ToGbk(const std::string& utf8)
+{
+	int len = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, NULL, 0);
+	std::wstring wstr(len, L'\0');
+	MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, &wstr[0], len);
+	len = WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), -1, NULL, 0, NULL, NULL);
+	std::string gbk(len, '\0');
+	WideCharToMultiByte(CP_ACP, 0, wstr.c_str(), -1, &gbk[0], len, NULL, NULL);
+	if (!gbk.empty() && gbk.back() == '\0') gbk.pop_back();
+	return gbk;
 }
